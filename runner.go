@@ -34,7 +34,7 @@ type Manager struct {
 	Concurrency int
 	Queues      []string
 	Pool
-	Logger      Logger
+	Logger Logger
 
 	quiet bool
 	// The done channel will always block unless
@@ -256,7 +256,16 @@ func (mgr *Manager) with(fn func(fky *faktory.Client) error) error {
 	if !ok {
 		return fmt.Errorf("Connection is not a Faktory client instance: %+v", conn)
 	}
-	err = fn(f)
+
+	if err = fn(f); err != nil {
+		mgr.Close()
+		pool, err := NewChannelPool(0, mgr.Concurrency, func() (Closeable, error) { return faktory.Open() })
+		if err != nil {
+			return err
+		}
+		mgr.Pool = pool
+	}
+
 	conn.Close()
-	return err
+	return nil
 }
